@@ -1,0 +1,612 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MindMesh - Responsive Pro (v2.5)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap" rel="stylesheet">
+    <link rel="icon" type="image/x-icon" href="puzzelico.ico">
+
+<style>
+    /* * =============================================
+     * CSS Custom Properties (Variables)
+     * =============================================
+    */
+    :root {
+        --wheel-size: clamp(300px, 85vmin, 550px); /* Slightly smaller max for better balance */
+        --brand-color: #4f46e5;
+        --brand-color-light: #6366f1;
+        --duration-fast: 200ms;
+        --duration-normal: 300ms;
+        --ease-out-quint: cubic-bezier(0.22, 1, 0.36, 1);
+        --ease-out-back: cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+    
+    /* Dynamic Theming */
+    .theme-indigo { --brand-color: #4f46e5; --brand-color-light: #6366f1; }
+    .theme-teal { --brand-color: #0d9488; --brand-color-light: #14b8a6; }
+    .theme-rose { --brand-color: #e11d48; --brand-color-light: #f43f5e; }
+    .theme-amber { --brand-color: #d97706; --brand-color-light: #f59e0b; }
+
+    html { scroll-behavior: smooth; }
+    body {
+        font-family: 'Poppins', sans-serif;
+        background-color: #f1f5f9;
+        overscroll-behavior-y: contain;
+    }
+
+    body.modal-open { overflow: hidden; }
+
+    /* KEY IMPROVEMENT: Loading Screen Styling */
+    .loading-screen {
+        position: fixed;
+        top: 0; left: 0;
+        width: 100%; height: 100%;
+        background-color: #f1f5f9; /* Match body bg */
+        z-index: 200;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        transition: opacity 300ms ease-out;
+    }
+    .loading-spinner {
+        width: 48px; height: 48px;
+        border: 5px solid #e2e8f0; /* slate-200 */
+        border-bottom-color: var(--brand-color);
+        border-radius: 50%;
+        display: inline-block;
+        box-sizing: border-box;
+        animation: rotation 1s linear infinite;
+    }
+    @keyframes rotation {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
+    
+    /* * =============================================
+     * Wheel Styling
+     * =============================================
+    */
+    .wheel-container-wrapper {
+        position: relative;
+        width: var(--wheel-size);
+        height: var(--wheel-size);
+        filter: drop-shadow(0 10px 15px rgba(0,0,0,0.08)) drop-shadow(0 4px 6px rgba(0,0,0,0.05));
+    }
+    .wheel-container {
+        width: 100%; height: 100%;
+        border-radius: 50%;
+        border: 12px solid white;
+        box-shadow: inset 0 0 20px rgba(0,0,0,0.12);
+        transition: transform 8s var(--ease-out-quint);
+        overflow: hidden;
+    }
+    .wheel-pointer {
+        position: absolute; top: -15px; left: 50%;
+        transform: translateX(-50%);
+        width: 55px; height: 65px;
+        background: linear-gradient(180deg, var(--brand-color-light), var(--brand-color));
+        clip-path: polygon(50% 100%, 0 0, 100% 0);
+        z-index: 10;
+        border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%;
+        box-shadow: 0 5px 12px rgba(0,0,0,0.15);
+        animation: pointer-bounce 1.2s infinite alternate ease-in-out;
+    }
+    @keyframes pointer-bounce {
+        from { transform: translate(-50%, -5px); }
+        to { transform: translate(-50%, 0); }
+    }
+    .wheel-segment {
+        position: absolute; width: 100%; height: 100%; border-radius: 50%;
+        overflow: hidden; transition: filter var(--duration-normal) ease;
+    }
+    .wheel-segment:hover { filter: brightness(1.1); }
+    .wheel-label {
+        position: absolute; top: 3%; left: 50%;
+        color: white; font-weight: 700; 
+        font-size: calc(var(--wheel-size) / 28);
+        text-shadow: 1px 1px 3px rgba(0,0,0,0.4); 
+        user-select: none; transform-origin: center center;
+    }
+    
+    /* * =============================================
+     * UI Components & Animations
+     * =============================================
+    */
+    dialog {
+        opacity: 0; transform: scale(0.95) translateY(10px);
+        transition: opacity var(--duration-fast) ease, transform var(--duration-fast) ease, display var(--duration-fast) allow-end;
+    }
+    dialog[open] {
+        opacity: 1; transform: scale(1) translateY(0);
+        transition-timing-function: var(--ease-out-back);
+    }
+    dialog::backdrop {
+        background-color: rgba(15, 23, 42, 0.5); backdrop-filter: blur(4px); 
+        opacity: 0;
+        transition: opacity var(--duration-normal) ease, backdrop-filter var(--duration-normal) ease, display var(--duration-normal) allow-end;
+    }
+    dialog[open]::backdrop { opacity: 1; }
+    dialog:not([open]) { display: none; }
+    
+    /* KEY IMPROVEMENT: Adaptive Modals - On mobile, they take up more screen height. */
+    @media (max-width: 640px) {
+        dialog {
+            max-height: 98vh; /* Allow a tiny bit of space at top/bottom */
+            height: 95%;
+            margin: auto;
+        }
+    }
+   
+    .toast { animation: toast-in-out 4s cubic-bezier(0.25, 1, 0.5, 1) forwards; }
+    @keyframes toast-in-out {
+        0% { transform: translateY(150%) scale(0.9); opacity: 0; }
+        15%, 85% { transform: translateY(0) scale(1); opacity: 1; }
+        100% { transform: translateY(150%) scale(0.9); opacity: 0; }
+    }
+    
+    .btn { @apply font-semibold py-2 px-4 rounded-lg shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-slate-100 transition-all duration-200 hover:-translate-y-0.5 active:translate-y-0 active:shadow-sm active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed; }
+    .btn-primary { background-color: var(--brand-color); @apply btn text-white hover:bg-opacity-90 focus-visible:ring-indigo-500; }
+    .btn-secondary { @apply btn bg-slate-200 text-slate-800 hover:bg-slate-300 focus-visible:ring-slate-400; }
+    .btn-danger { @apply btn bg-red-600 text-white hover:bg-red-700 focus-visible:ring-red-500; }
+    .input-field { @apply w-full bg-white p-2.5 rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-100 focus:border-transparent transition-shadow; }
+    .toggle-switch-label { @apply relative inline-flex items-center cursor-pointer; }
+    .toggle-switch-bg { @apply w-11 h-6 bg-slate-300 rounded-full peer peer-focus-visible:ring-2 peer-focus-visible:ring-offset-1 peer-focus-visible:ring-indigo-300 after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border after:rounded-full after:h-5 after:w-5 after:transition-all; }
+    .toggle-switch-input:checked + .toggle-switch-bg { background-color: var(--brand-color); }
+    .toggle-switch-input:checked + .toggle-switch-bg:after { transform: translateX(100%); border-color: white; }
+</style>
+</head>
+
+<body class="bg-slate-100 text-slate-800 flex flex-col items-center min-h-screen p-4 overflow-x-hidden theme-indigo">
+
+<!-- KEY IMPROVEMENT: Loading Screen Element -->
+<div id="loading-screen" class="loading-screen">
+    <h2 class="text-3xl font-bold text-slate-600 mb-2">MindMesh</h2>
+    <div class="loading-spinner"></div>
+    <p class="text-slate-500 mt-4 text-sm">Initializing...</p>
+</div>
+
+<!-- KEY IMPROVEMENT: Changed `justify-center` to `justify-between` on main container for better vertical spacing -->
+<div class="flex-grow flex flex-col items-center justify-between relative w-full">
+    <header class="text-center mt-8 sm:mt-0">
+        <h1 class="text-4xl sm:text-5xl lg:text-6xl font-bold text-slate-700 tracking-tight">MindMesh <span class="text-sm font-light text-slate-400">v2.5</span></h1>
+        <p class="text-slate-500 text-base sm:text-lg mt-1">Spin, Solve, and Succeed</p>
+    </header>
+
+    <div class="wheel-container-wrapper my-4">
+        <div class="wheel-pointer"></div>
+        <div id="wheel-container" class="wheel-container bg-slate-200"></div>
+        <button id="spin-button" class="absolute inset-0 m-auto bg-white text-slate-800 rounded-full w-28 h-28 font-bold text-2xl shadow-xl hover:bg-slate-50 focus:outline-none focus-visible:ring-4 focus-visible:ring-indigo-300 transition-all duration-200 transform active:scale-95 z-10 disabled:opacity-70 disabled:cursor-wait" aria-label="Spin the wheel">SPIN</button>
+    </div>
+
+    <!-- Spacer at the bottom of the main content -->
+    <div class="h-24"></div> 
+</div>
+
+<!-- KEY IMPROVEMENT: Redesigned Footer Navigation
+    - A floating, centered bar that's more modern and less intrusive.
+    - `pb-[env(safe-area-inset-bottom)]` is crucial for iPhone home bar compatibility.
+-->
+<nav class="fixed bottom-0 left-1/2 -translate-x-1/2 z-20 w-full max-w-lg px-4 pb-2" style="padding-bottom: calc(0.5rem + env(safe-area-inset-bottom));">
+    <div class="flex justify-center gap-2 sm:gap-3 bg-white/70 backdrop-blur-sm rounded-full shadow-lg p-2">
+        <button data-action="showControlPanel" class="p-3 rounded-full hover:bg-slate-200 focus:outline-none focus-visible:ring-2 active:scale-95 transition-transform" style="--tw-ring-color: var(--brand-color-light);" aria-label="Open Control Panel"><svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-slate-600 pointer-events-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6V4m0 16v-2m8-8h2M4 12H2m15.364 6.364l-1.414-1.414M6.05 6.05l1.414 1.414m11.314 0l-1.414 1.414M6.05 17.95l1.414-1.414M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg></button>
+        <button data-action="showUsers" class="p-3 rounded-full hover:bg-slate-200 focus:outline-none focus-visible:ring-2 active:scale-95 transition-transform" style="--tw-ring-color: var(--brand-color-light);" aria-label="Open Users"><svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-slate-600 pointer-events-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M15 21a6 6 0 00-9-5.197m0 0A5 5 0 019 10a5 5 0 01-1.256-3.837M15 21a6 6 0 00-9-5.197" /></svg></button>
+        <button data-action="showHistory" class="p-3 rounded-full hover:bg-slate-200 focus:outline-none focus-visible:ring-2 active:scale-95 transition-transform" style="--tw-ring-color: var(--brand-color-light);" aria-label="Open History"><svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-slate-600 pointer-events-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg></button>
+        <button data-action="showStats" class="p-3 rounded-full hover:bg-slate-200 focus:outline-none focus-visible:ring-2 active:scale-95 transition-transform" style="--tw-ring-color: var(--brand-color-light);" aria-label="Open Statistics"><svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-slate-600 pointer-events-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg></button>
+        <button data-action="showSettings" class="p-3 rounded-full hover:bg-slate-200 focus:outline-none focus-visible:ring-2 active:scale-95 transition-transform" style="--tw-ring-color: var(--brand-color-light);" aria-label="Open Settings"><svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-slate-600 pointer-events-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg></button>
+    </div>
+</nav>
+
+<!-- Modal Dialog & Toast Containers -->
+<dialog id="modal-dialog" class="p-0 bg-white rounded-2xl shadow-2xl w-full border-0 max-w-md"></dialog>
+<!-- Adjusted toast container position to account for new nav bar -->
+<div id="toast-container" class="fixed bottom-28 sm:bottom-8 left-1/2 -translate-x-1/2 z-[100] space-y-2 w-full max-w-xs sm:max-w-sm"></div>
+<canvas id="confetti-canvas" class="fixed top-0 left-0 w-full h-full pointer-events-none z-[99]"></canvas>
+
+<!-- Audio Elements -->
+<audio id="click-sound" src="https://cdn.jsdelivr.net/gh/sadeepas/mindmesh@main/ui-click.mp3" preload="auto"></audio>
+<audio id="spinning-sound" src="https://cdn.jsdelivr.net/gh/sadeepas/mindmesh@main/spining%20wheel%20sound.mp3" loop preload="auto"></audio>
+<audio id="win-sound" src="https://cdn.jsdelivr.net/gh/sadeepas/mindmesh@main/win.mp3" preload="auto"></audio>
+
+<script>
+// Auto update year
+document.addEventListener("DOMContentLoaded", function() {
+    // This is a failsafe if the main script doesn't run
+    const yearSpan = document.getElementById("year");
+    if (yearSpan) {
+        yearSpan.textContent = new Date().getFullYear();
+    }
+});
+</script>
+
+
+<script>
+// Main script execution starts after the entire HTML document has been loaded and parsed.
+document.addEventListener('DOMContentLoaded', () => {
+
+    /**
+     * @constant {object} DB_CONFIG
+     * Configuration for the IndexedDB database.
+     */
+    const DB_CONFIG = {
+        NAME: 'MindMeshDB_ResponsivePro_v2_5',
+        VERSION: 1, 
+        STORES: ['entries', 'users', 'history', 'settings'],
+    };
+
+    /**
+     * @class DBService
+     * @description A Promise-based wrapper for IndexedDB operations.
+     */
+    class DBService {
+        constructor() { this.db = null; }
+        async init() {
+            return new Promise((resolve, reject) => {
+                const request = indexedDB.open(DB_CONFIG.NAME, DB_CONFIG.VERSION);
+                request.onerror = e => reject("Database error: " + e.target.errorCode);
+                request.onsuccess = e => { this.db = e.target.result; resolve(); };
+                request.onupgradeneeded = e => {
+                    const db = e.target.result;
+                    DB_CONFIG.STORES.forEach(name => {
+                        if (!db.objectStoreNames.contains(name)) {
+                            db.createObjectStore(name, { keyPath: 'id', autoIncrement: true });
+                        }
+                    });
+                };
+            });
+        }
+        async get(storeName, id) {
+            return new Promise((res, rej) => {
+                const req = this.db.transaction(storeName, 'readonly').objectStore(storeName).get(id);
+                req.onsuccess = e => res(e.target.result); req.onerror = e => rej(e.target.error);
+            });
+        }
+        async getAll(storeName) {
+            return new Promise((res, rej) => {
+                const req = this.db.transaction(storeName, 'readonly').objectStore(storeName).getAll();
+                req.onsuccess = e => res(e.target.result); req.onerror = e => rej(e.target.error);
+            });
+        }
+        async put(storeName, item) {
+            const tx = this.db.transaction(storeName, 'readwrite');
+            const req = tx.objectStore(storeName).put(item);
+            return new Promise((res, rej) => {
+                tx.oncomplete = () => res(req.result); tx.onerror = e => rej(e.target.error);
+            });
+        }
+        async delete(storeName, id) {
+            const tx = this.db.transaction(storeName, 'readwrite');
+            tx.objectStore(storeName).delete(id);
+            return new Promise((res, rej) => {
+                tx.oncomplete = res; tx.onerror = e => rej(e.target.error);
+            });
+        }
+        async clear(storeName) {
+            const tx = this.db.transaction(storeName, 'readwrite');
+            tx.objectStore(storeName).clear();
+            return new Promise((res, rej) => {
+                tx.oncomplete = res; tx.onerror = e => rej(e.target.error);
+            });
+        }
+    }
+
+    /**
+     * @class UIService
+     * @description Handles all DOM manipulations, UI rendering, sounds, and visual effects.
+     */
+    class UIService {
+        constructor(app) {
+            this.app = app;
+            this.elements = {
+                wheelContainer: document.getElementById('wheel-container'),
+                spinButton: document.getElementById('spin-button'),
+                dialog: document.getElementById('modal-dialog'),
+                toastContainer: document.getElementById('toast-container'),
+                confettiCanvas: document.getElementById('confetti-canvas'),
+                clickSound: document.getElementById('click-sound'),
+                spinningSound: document.getElementById('spinning-sound'),
+                winSound: document.getElementById('win-sound'),
+                body: document.body,
+                loadingScreen: document.getElementById('loading-screen'),
+            };
+            this.Confetti.canvas = this.elements.confettiCanvas;
+            this.Modals = new ModalService(this.app, this);
+        }
+        
+        hideLoadingScreen() {
+            this.elements.loadingScreen.style.opacity = '0';
+            setTimeout(() => {
+                this.elements.loadingScreen.style.display = 'none';
+            }, 300); // Match CSS transition duration
+        }
+        
+        renderWheel(allEntries) {
+            // ... (renderWheel logic is unchanged and robust)
+            const container = this.elements.wheelContainer;
+            container.innerHTML = '';
+            const fragment = document.createDocumentFragment();
+            const enabledEntries = allEntries.filter(e => e.enabled && !e.removed); 
+            if (enabledEntries.length === 0) {
+                 container.innerHTML = '<div class="absolute inset-0 flex items-center justify-center text-slate-500 font-bold text-xl text-center p-4">Add or enable items in the Control Panel.</div>';
+                 this.elements.spinButton.disabled = true;
+                 return;
+            } else {
+                 this.elements.spinButton.disabled = this.app.state.isSpinning;
+            }
+            const totalWeight = enabledEntries.reduce((sum, entry) => sum + (entry.weight || 1), 0);
+            let cumulativeAngle = 0;
+            enabledEntries.forEach((entry, index) => {
+                const weight = entry.weight || 1;
+                const sliceDeg = (weight / totalWeight) * 360;
+                const segment = document.createElement('div');
+                segment.className = 'wheel-segment';
+                segment.style.transform = `rotate(${cumulativeAngle}deg)`;
+                const content = document.createElement('div');
+                const hue = (index * (360 / enabledEntries.length) * 1.5) % 360;
+                content.className = 'h-full w-full';
+                content.style.backgroundColor = `hsl(${hue}, 70%, 60%)`;
+                const tanAngle = Math.tan(sliceDeg * Math.PI / 180);
+                content.style.clipPath = `polygon(50% 50%, 50% 0, calc(50% + 51% * ${tanAngle}) 0, 50% 50%)`;
+                const label = document.createElement('div');
+                label.className = 'wheel-label';
+                label.style.transform = 'translateX(-50%) rotate(90deg)';
+                label.textContent = entry.number;
+                segment.appendChild(content);
+                segment.appendChild(label);
+                fragment.appendChild(segment);
+                cumulativeAngle += sliceDeg;
+            });
+            container.appendChild(fragment);
+        }
+        
+        showToast(message, type = "info") {
+            const icons = { info: 'ℹ️', success: '✅', error: '❌' };
+            const colors = { info: 'bg-slate-800', success: 'bg-green-600', error: 'bg-red-600' };
+            const toast = document.createElement('div');
+            toast.className = `toast ${colors[type]} flex items-center gap-4 text-white font-semibold py-3 px-5 rounded-xl shadow-2xl`;
+            toast.innerHTML = `<span>${icons[type]}</span><span>${message}</span>`;
+            this.elements.toastContainer.appendChild(toast);
+            setTimeout(() => toast.remove(), 4000);
+        }
+
+        playSound(soundElement, loop = false) {
+            if (this.app.state.settings.sounds && soundElement) {
+                soundElement.currentTime = 0;
+                soundElement.loop = loop;
+                soundElement.volume = 1; 
+                soundElement.play().catch(e => console.warn("Sound play was prevented by browser:", e));
+            }
+        }
+
+        fadeOutSound(soundElement, duration = 1500) {
+            if (!this.app.state.settings.sounds || !soundElement || soundElement.paused) return;
+            const initialVolume = soundElement.volume;
+            const fadeInterval = 50;
+            const fadeSteps = duration / fadeInterval;
+            const volumeStep = initialVolume / fadeSteps;
+            const fadeOutInterval = setInterval(() => {
+                const newVolume = soundElement.volume - volumeStep;
+                if (newVolume > 0) {
+                    soundElement.volume = newVolume;
+                } else {
+                    clearInterval(fadeOutInterval);
+                    soundElement.pause();
+                    soundElement.currentTime = 0;
+                    soundElement.volume = initialVolume;
+                }
+            }, fadeInterval);
+        }
+        
+        applyTheme(theme) {
+            this.elements.body.className = this.elements.body.className.replace(/\btheme-[a-z]+\b/g, '').trim();
+            this.elements.body.classList.add(`theme-${theme}`);
+            this.app.state.settings.theme = theme;
+        }
+        
+        Confetti = { /* ... (Confetti logic unchanged) ... */ particles:[],animationFrameId:null,canvas:null,start(){const a=this.canvas,t=a.getContext("2d");a.width=window.innerWidth,a.height=window.innerHeight,this.particles=[];const e=250,i=["#fde047","#f97316","#22c55e","#3b82f6","#ec4899"];for(let s=0;s<e;s++)this.particles.push({x:Math.random()*a.width,y:-20,color:i[Math.floor(Math.random()*i.length)],radius:Math.random()*3+2,vx:Math.random()*10-5,vy:Math.random()*5+2,alpha:1,rotation:Math.random()*360});this.animate(),setTimeout(()=>this.stop(),6e3)},stop(){this.animationFrameId&&(cancelAnimationFrame(this.animationFrameId),this.animationFrameId=null);const a=this.canvas.getContext("2d");setTimeout(()=>a.clearRect(0,0,this.canvas.width,this.canvas.height),500)},animate(){const a=this.canvas.getContext("2d");if(!this.canvas)return;a.clearRect(0,0,this.canvas.width,this.canvas.height),this.particles.forEach((t,e)=>{t.vy+=.15,t.x+=t.vx,t.y+=t.vy,t.alpha-=.004,t.rotation+=t.vx,t.alpha<=0?this.particles.splice(e,1):(a.save(),a.globalAlpha=t.alpha,a.translate(t.x,t.y),a.rotate(t.rotation*Math.PI/180),a.fillStyle=t.color,a.beginPath(),a.arc(0,0,t.radius,0,2*Math.PI),a.fill(),a.restore())}),this.particles.length>0?this.animationFrameId=requestAnimationFrame(()=>this.animate()):this.stop()}}
+    }
+    
+    /**
+     * @class ModalService
+     * @description Dedicated service for creating and managing all modal dialogs.
+     */
+    class ModalService {
+        constructor(app, ui) { this.app = app; this.ui = ui; this.dialog = ui.elements.dialog; }
+        open(content, size = 'max-w-md') {
+            this.dialog.className = `p-0 bg-white rounded-2xl shadow-2xl w-full border-0 ${size}`;
+            this.dialog.innerHTML = content;
+            this.dialog.showModal();
+            document.body.classList.add('modal-open');
+            this.attachEventListeners();
+        }
+        close() { 
+            this.dialog.close(); this.dialog.innerHTML = '';
+            document.body.classList.remove('modal-open');
+        }
+        attachEventListeners() { /* Renamed from attachImageUploadListener to be more generic */
+            const imageUpload = this.dialog.querySelector('#editor-image-upload');
+            if (imageUpload) { /* ... (image upload logic unchanged) ... */ imageUpload.addEventListener("change",e=>{const t=e.target.files[0];if(t&&t.type.startsWith("image/")){const i=new FileReader;i.onload=e=>{this.dialog.querySelector("#editor-image-preview").src=e.target.result,this.dialog.querySelector("#editor-image-preview").classList.remove("hidden"),this.dialog.querySelector("#editor-remove-image").classList.remove("hidden")},i.readAsDataURL(t)}else t&&this.ui.showToast("Please select a valid image file.","error")}) }
+            
+            // Searchable dropdown logic for participant selection
+            const userSearch = this.dialog.querySelector('#solver-user-search');
+            if(userSearch) {
+                userSearch.addEventListener('input', e => {
+                    const searchTerm = e.target.value.toLowerCase();
+                    const options = this.dialog.querySelectorAll('#solver-user-select option');
+                    options.forEach(option => {
+                        const isMatch = option.textContent.toLowerCase().includes(searchTerm);
+                        // Hide non-matching options, but never hide the "new" or placeholder options.
+                        option.classList.toggle('hidden', !isMatch && option.value && option.value !== 'new');
+                    });
+                });
+            }
+        }
+        
+        showResult(entry) {
+            // ... (showResult logic unchanged)
+            const imageHtml = entry.image ? `<img src="${entry.image}" class="w-48 h-48 mx-auto mb-4 rounded-2xl object-cover border-4 border-yellow-300 shadow-lg" alt="Item Image" onerror="this.style.display='none'">` : `<div class="w-36 h-36 mx-auto rounded-full bg-slate-300 text-slate-600 flex items-center justify-center text-6xl font-bold mb-4 shadow-lg">${entry.number}</div>`;
+            const restoreButton = entry.removed ? `<button data-action="restoreEntry" data-id="${entry.id}" class="btn-secondary w-full p-3 text-lg mt-3">Restore Item to Wheel</button>` : '';
+            const content = `<div class="text-center p-6 sm:p-8"><h2 class="text-xl font-semibold text-slate-500 mb-2">You landed on:</h2>${imageHtml}<h3 class="text-5xl sm:text-6xl font-bold text-slate-800 tracking-tight">Item #${entry.number}</h3><p class="text-slate-600 mt-3 mb-5 px-4 h-24 overflow-y-auto bg-slate-50 rounded-lg py-2">${entry.description||"No description available."}</p><div class="mt-8"><button data-action="startChallenge" data-id="${entry.id}" class="btn-primary w-full p-3 text-lg">Start Challenge</button>${restoreButton}</div></div>`;
+            this.open(content);
+            this.dialog.addEventListener('close', () => this.ui.Confetti.stop(), { once: true });
+        }
+        
+        showControlPanel() {
+            // ... (showControlPanel logic now uses a flex-based layout for the modal body to work with adaptive height)
+            const gridContent = this.app.state.entries.map(entry => {
+                const weightText = entry.weight > 1 ? `x${entry.weight}` : '';
+                const statusClass = entry.removed ? 'opacity-50 border-4 border-yellow-500' : (entry.enabled ? 'bg-slate-700 text-white hover:bg-slate-800' : 'bg-slate-300 text-slate-500 hover:bg-slate-400');
+                const statusIcon = entry.removed ? `<span class="absolute top-1 right-1 bg-yellow-500 text-white text-xs font-bold px-1 py-0.5 rounded-full">OUT</span>` : '';
+                return `<button class="relative aspect-square flex flex-col items-center justify-center rounded-lg text-lg font-bold transition-transform transform hover:scale-105 ${statusClass}" data-action="showItemEditor" data-id="${entry.id}">${entry.image?`<img src="${entry.image}" class="w-full h-full object-cover rounded-lg pointer-events-none" alt="" onerror="this.style.opacity=0"><span class="absolute bottom-1 right-1 bg-black/50 text-white text-xs font-bold px-1.5 py-0.5 rounded">${entry.number}</span>`:`<span class="text-4xl">${entry.number}</span>`}${weightText?`<span class="absolute top-1 left-1 bg-green-400 text-green-900 text-xs font-bold px-1 py-0 rounded">W${weightText}</span>`:""}${statusIcon}</button>`;
+            }).join('');
+            const content = `<div class="p-4 sm:p-6 flex flex-col h-full"><div class="flex-shrink-0 flex justify-between items-center mb-4 border-b pb-3"><h2 class="text-2xl font-bold text-slate-800">Control Panel</h2><button class="text-slate-400 hover:text-slate-600 text-2xl" data-action="closeModal">&times;</button></div><div class="flex-grow grid grid-cols-5 sm:grid-cols-6 md:grid-cols-8 lg:grid-cols-10 gap-3 overflow-y-auto p-1">${gridContent}</div></div>`;
+            this.open(content, 'max-w-4xl');
+        }
+
+        showItemEditor(id) {
+            // ... (showItemEditor now uses a flex-based layout)
+            const entry = this.app.state.entries.find(e => e.id === id);
+            if (!entry) return;
+            const content = `<form class="p-4 sm:p-6 flex flex-col h-full" onsubmit="return false"><div class="flex-shrink-0 flex justify-between items-center mb-4 border-b pb-3"><h2 class="text-2xl font-bold text-slate-800">Edit Item #${entry.number}</h2><button type="button" class="text-slate-400 hover:text-slate-600 text-2xl" data-action="closeModal">&times;</button></div><div class="flex-grow overflow-y-auto pr-2 space-y-4"><div class="flex items-center justify-between p-2 rounded-lg bg-slate-100"><label for="editor-enabled" class="font-semibold text-slate-700">Enabled on Wheel</label><label class="toggle-switch-label"><input type="checkbox" id="editor-enabled" class="sr-only toggle-switch-input" ${entry.enabled?"checked":""}><div class="toggle-switch-bg"></div></label></div><div class="flex items-center justify-between p-2 rounded-lg bg-slate-100"><label for="editor-remove-on-win" class="font-semibold text-slate-700">Remove on Win</label><label class="toggle-switch-label"><input type="checkbox" id="editor-remove-on-win" class="sr-only toggle-switch-input" ${entry.removeOnWin?"checked":""}><div class="toggle-switch-bg"></div></label></div>${entry.removed?`<button type="button" data-action="restoreEntry" data-id="${entry.id}" class="btn-secondary w-full text-sm">Item is currently REMOVED. Click to restore.</button>`:""}<div><label for="editor-timer" class="block font-semibold mb-1 text-slate-700">Timer (seconds)</label><input type="number" id="editor-timer" min="5" value="${entry.timer}" class="input-field"></div><div><label for="editor-weight" class="block font-semibold mb-1 text-slate-700">Weight (e.g., 2 = Double Chance)</label><input type="number" id="editor-weight" min="1" value="${entry.weight||1}" class="input-field"></div><div><label for="editor-description" class="block font-semibold mb-1 text-slate-700">Description</label><textarea id="editor-description" rows="3" class="input-field">${entry.description||""}</textarea></div><div><label class="block font-semibold mb-1 text-slate-700">Image</label><input type="file" id="editor-image-upload" accept="image/*" class="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-slate-100 file:text-slate-700 hover:file:bg-slate-200 cursor-pointer"><div class="mt-2 flex items-center gap-4"><img id="editor-image-preview" src="${entry.image||""}" class="${entry.image?"":"hidden"} w-24 h-24 object-cover rounded-md border-2" onerror="this.classList.add('hidden')"><button type="button" id="editor-remove-image" data-action="removeImage" class="${entry.image?"":"hidden"} btn-danger px-2 py-1 text-sm">Remove</button></div></div></div><div class="flex-shrink-0 mt-6 flex justify-end gap-4 pt-4 border-t"><button type="button" class="btn-secondary" data-action="closeModal">Cancel</button><button type="submit" class="btn-primary" data-action="saveEntry" data-id="${entry.id}">Save Changes</button></div></form>`;
+            this.open(content);
+        }
+        
+        /* KEY IMPROVEMENT: Redesigned Participant (Solver Start) Form */
+        showSolverStartForm(entryId) {
+            const entry = this.app.state.entries.find(e => e.id === entryId);
+            const activeUsers = this.app.state.users.filter(u => u.status === 'active');
+            const userOptions = activeUsers.map(u => `<option value="${u.id}">${u.name} (${u.school || 'N/A'})</option>`).join('');
+            
+            const content = `
+                <form class="p-6 flex flex-col h-full" onsubmit="return false">
+                    <div class="flex-shrink-0">
+                        <h2 class="text-2xl font-bold text-slate-800 mb-1">Start Challenge</h2>
+                        <p class="text-slate-500 mb-4">for Item #${entry.number}</p>
+                    </div>
+
+                    <div class="flex-grow overflow-y-auto space-y-4">
+                        <div>
+                            <label for="solver-user-search" class="block font-semibold mb-1">Select Participant</label>
+                            <input type="search" id="solver-user-search" class="input-field mb-2" placeholder="Search for a participant...">
+                            <select id="solver-user-select" class="input-field p-3 text-lg" size="6" onchange="document.getElementById('new-user-fields').classList.toggle('hidden', this.value !== 'new')">
+                                <option value="" disabled selected>Choose a participant...</option>
+                                ${userOptions}
+                                <option value="new" class="font-bold text-indigo-600 mt-2 pt-2 border-t">-- Enter New Participant --</option>
+                            </select>
+                        </div>
+                        <div id="new-user-fields" class="hidden space-y-4 pt-2 border-t mt-4">
+                            <h3 class="font-semibold text-slate-600">New Participant Details:</h3>
+                            <div><label for="solver-name" class="block font-semibold mb-1">Name</label><input type="text" id="solver-name" class="input-field p-3" placeholder="Enter name"></div>
+                            <div><label for="solver-school" class="block font-semibold mb-1">School</label><input type="text" id="solver-school" class="input-field p-3" placeholder="(Optional)"></div>
+                        </div>
+                    </div>
+
+                    <div class="flex-shrink-0 mt-6 flex justify-end gap-4 pt-4 border-t">
+                        <button type="button" data-action="closeModal" class="btn-secondary">Cancel</button>
+                        <button type="submit" data-action="startSolver" data-id="${entry.id}" class="btn-primary">Start</button>
+                    </div>
+                </form>`;
+            this.open(content, 'max-w-md');
+        }
+
+        // ... (All other modal and UI logic remains largely unchanged as it was already robust)
+        showUsers() { const userRows = this.app.state.users.map(user => `<tr class="border-b border-slate-200 last:border-b-0 even:bg-slate-50"><td class="p-3">${user.name}<br><small class="text-slate-500">${user.school || 'N/A'}</small></td><td class="p-3"><span class="px-2 py-1 text-xs font-semibold rounded-full ${user.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}">${user.status}</span></td><td class="p-3 text-right space-x-1"><button class="btn-secondary text-xs px-2 py-1" data-action="showUserEditor" data-id="${user.id}">Edit</button><button class="btn-danger text-xs px-2 py-1" data-action="deleteUser" data-id="${user.id}">Delete</button></td></tr>`).join(''); const emptyState = '<tr><td colspan="3" class="p-8 text-center text-slate-500"><p class="font-semibold">No Users Found</p><p>Add a new user to get started.</p></td></tr>'; const content = `<div class="p-4 sm:p-6 flex flex-col h-full"><div class="flex-shrink-0 flex flex-col sm:flex-row justify-between sm:items-center gap-3 mb-4 border-b pb-3"><h2 class="text-2xl font-bold text-slate-800">Users</h2><div class="flex items-center gap-2 self-end sm:self-center">${this.app.state.users.length > 0 ? `<button data-action="deleteAllUsers" class="btn-danger text-sm px-3 py-1">Delete All</button>`:''}<button data-action="showUserEditor" class="btn-primary text-sm px-3 py-1">Add New</button></div></div><div class="overflow-y-auto flex-grow"><table class="w-full text-left"><thead class="bg-slate-100 sticky top-0"><tr class="*:p-3 *:font-semibold *:text-slate-600"><th>Name</th><th>Status</th><th></th></tr></thead><tbody>${this.app.state.users.length ? userRows : emptyState}</tbody></table></div><div class="flex-shrink-0 pt-4 border-t mt-4 flex justify-end"><button data-action="closeModal" class="btn-secondary">Close</button></div></div>`; this.open(content, 'max-w-3xl'); }
+        showUserEditor(id) { const isEditing = id !== undefined; const user = isEditing ? this.app.state.users.find(u => u.id === id) : { name: '', school: '', status: 'active', notes: '' }; const content = `<form class="p-6" onsubmit="return false"><h2 class="text-2xl font-bold text-slate-800 mb-4">${isEditing ? 'Edit User' : 'Add New User'}</h2><div class="space-y-4"><div><label for="user-name" class="block font-semibold mb-1">Name</label><input type="text" id="user-name" value="${user.name}" class="input-field" required></div><div><label for="user-school" class="block font-semibold mb-1">School</label><input type="text" id="user-school" value="${user.school || ''}" class="input-field"></div><div class="flex items-center justify-between p-2 rounded-lg bg-slate-100"><label for="user-status" class="font-semibold">Status is Active</label><label class="toggle-switch-label"><input type="checkbox" id="user-status" class="sr-only toggle-switch-input" ${user.status === 'active' ? 'checked' : ''}><div class="toggle-switch-bg"></div></label></div><div><label for="user-notes" class="block font-semibold mb-1">Notes</label><textarea id="user-notes" rows="3" class="input-field">${user.notes || ''}</textarea></div></div><div class="mt-6 flex justify-end gap-4"><button type="button" data-action="showUsers" class="btn-secondary">Cancel</button><button type="submit" data-action="saveUser" ${isEditing ? `data-id="${id}"` : ''} class="btn-primary">Save</button></div></form>`; this.open(content); }
+        showHistory() { const historyItems=[...this.app.state.history].reverse();const statusColors={solved:"bg-green-100 text-green-800",stopped:"bg-red-100 text-red-800",active:"bg-yellow-100 text-yellow-800",time_up:"bg-orange-100 text-orange-800"};const historyCards=historyItems.map(rec=>{const user=this.app.state.users.find(u=>u.id===rec.userId);return` <div class="bg-slate-50 rounded-lg p-4 border border-slate-200"><div class="flex justify-between items-start"><div><p class="font-bold text-lg">Item #${rec.number}</p><p class="text-sm text-slate-600">${user?user.name:"<em>User Deleted</em>"}</p><p class="text-xs text-slate-400">${new Date(rec.startedAt).toLocaleString()}</p></div><span class="px-2 py-1 text-xs font-semibold rounded-full ${statusColors[rec.status]||"bg-gray-100"}">${rec.status.replace("_"," ")}</span></div><div class="mt-3 pt-3 border-t flex gap-2 justify-end"><button class="btn bg-blue-500 text-white text-xs px-2 py-1" data-action="toggleHistorySolved" data-id="${rec.id}">Toggle Solved</button><button class="btn-danger text-xs px-2 py-1" data-action="deleteHistory" data-id="${rec.id}">Delete</button></div></div>`}).join("");const historyRows=historyItems.map(rec=>{const user=this.app.state.users.find(u=>u.id===rec.userId);return` <tr class="border-b border-slate-200 *:p-3 *:text-left even:bg-slate-50"><td>${new Date(rec.startedAt).toLocaleString()}</td><td class="text-center font-bold">${rec.number}</td><td>${user?user.name:"<em>User Deleted</em>"}</td><td><span class="px-2 py-1 text-xs font-semibold rounded-full ${statusColors[rec.status]||"bg-gray-100"}">${rec.status.replace("_"," ")}</span></td><td class="text-right space-x-1"><button class="btn bg-blue-500 text-white text-xs px-2 py-1" data-action="toggleHistorySolved" data-id="${rec.id}">Toggle Solved</button><button class="btn-danger text-xs px-2 py-1" data-action="deleteHistory" data-id="${rec.id}">Delete</button></td></tr>`}).join("");const emptyState='<div class="p-8 text-center text-slate-500"><p class="font-semibold">No History Found</p></div>';const content=` <div class="p-4 sm:p-6 flex flex-col h-full"><div class="flex-shrink-0 flex flex-col sm:flex-row justify-between sm:items-center gap-3 mb-4 border-b pb-3"><h2 class="text-2xl font-bold text-slate-800">History</h2><div class="flex items-center gap-2 self-end sm:self-center">${this.app.state.history.length>0?`<button data-action="deleteAllHistory" class="btn-danger text-sm px-3 py-1">Delete All</button>`:""}<button data-action="closeModal" class="text-slate-400 hover:text-slate-600 text-2xl">&times;</button></div></div><div class="overflow-y-auto flex-grow">${this.app.state.history.length===0?emptyState:` <!-- Mobile View --><div class="space-y-3 md:hidden">${historyCards}</div><!-- Desktop View --><table class="w-full text-left hidden md:table"><thead class="bg-slate-100 sticky top-0"><tr class="*:p-3 *:font-semibold *:text-slate-600"><th>Date</th><th class="text-center">Item</th><th>User</th><th>Status</th><th></th></tr></thead><tbody>${historyRows}</tbody></table>`}</div></div>`;this.open(content,"max-w-4xl")}
+        showStats() { const totalAttempts=this.app.state.history.length;const solved=this.app.state.history.filter(h=>h.status==="solved").length;const timeUps=this.app.state.history.filter(h=>h.status==="time_up").length;const itemCounts=this.app.state.history.reduce((acc,h)=>{acc[h.number]=(acc[h.number]||0)+1;return acc},{});const topItems=Object.entries(itemCounts).sort((a,b)=>b[1]-a[1]).slice(0,5).map(([num,count])=>`<li class="flex justify-between"><span>Item #${num}</span> <span class="font-semibold">${count} times</span></li>`).join("");const content=` <div class="bg-white p-6 rounded-xl w-full"><div class="flex justify-between items-center mb-4 border-b pb-3"><h2 class="text-2xl font-bold text-slate-800">Statistics</h2><button data-action="closeModal" class="text-slate-400 hover:text-slate-600 text-2xl">&times;</button></div><div class="space-y-3"><div class="flex justify-between text-lg p-3 bg-slate-100 rounded-md"><span>Total Attempts:</span> <strong class="text-indigo-600">${totalAttempts}</strong></div><div class="flex justify-between text-lg p-3 bg-slate-100 rounded-md"><span>Solved:</span> <strong class="text-green-600">${solved}</strong></div><div class="flex justify-between text-lg p-3 bg-slate-100 rounded-md"><span>Time Ups:</span> <strong class="text-red-600">${timeUps}</strong></div><h3 class="font-bold text-lg pt-3">Top 5 Landed Items:</h3><ul class="space-y-1 text-slate-600">${topItems||"<li>No data yet.</li>"}</ul></div></div>`;this.open(content,"max-w-md")}
+        showSettings() { const themes={indigo:"Indigo (Default)",teal:"Teal",rose:"Rose",amber:"Amber"};const themeOptions=Object.entries(themes).map(([key,name])=>` <label class="flex items-center space-x-3 p-3 rounded-lg bg-slate-100 hover:bg-slate-200 cursor-pointer transition-colors has-[:checked]:ring-2 has-[:checked]:ring-offset-2 has-[:checked]:ring-indigo-500"><input type="radio" name="settings-theme" value="${key}" class="w-5 h-5 text-indigo-600 border-gray-300 focus:ring-indigo-500" ${this.app.state.settings.theme===key?"checked":""}><span class="theme-preview theme-preview-${key} w-6 h-6 rounded-full shadow-md border-2 border-slate-300 bg-${key}-600"></span><span class="font-medium text-slate-700">${name}</span></label>`).join("");const content=` <form class="p-4 sm:p-6 flex flex-col h-full" onsubmit="return false"><div class="flex-shrink-0 flex justify-between items-center mb-4 border-b pb-3"><h2 class="text-2xl font-bold text-slate-800">Settings & Data</h2><button type="button" data-action="closeModal" class="text-slate-400 hover:text-slate-600 text-2xl">&times;</button></div><div class="flex-grow overflow-y-auto space-y-4"><h3 class="text-lg font-bold text-slate-700">General</h3><div class="flex items-center justify-between p-2 rounded-lg bg-slate-100"><label for="settings-sounds" class="font-semibold">Enable Sounds</label><label class="toggle-switch-label"><input type="checkbox" id="settings-sounds" class="sr-only toggle-switch-input" ${this.app.state.settings.sounds?"checked":""}><div class="toggle-switch-bg"></div></label></div><div class="flex items-center justify-between p-2 rounded-lg bg-slate-100"><label for="settings-confetti" class="font-semibold">Enable Confetti</label><label class="toggle-switch-label"><input type="checkbox" id="settings-confetti" class="sr-only toggle-switch-input" ${this.app.state.settings.confetti?"checked":""}><div class="toggle-switch-bg"></div></label></div><div><label for="settings-duration" class="block font-semibold mb-1">Spin Duration (ms)</label><input type="number" id="settings-duration" min="2000" step="1000" value="${this.app.state.settings.spinDuration}" class="input-field"></div><hr class="my-2"><h3 class="text-lg font-bold text-slate-700">Theme</h3><div class="grid grid-cols-1 sm:grid-cols-2 gap-3">${themeOptions}</div><hr class="my-2"><h3 class="text-lg font-bold text-slate-700">Data Management</h3><div class="grid grid-cols-2 gap-3"><button type="button" data-action="exportJSON" class="btn bg-blue-100 text-blue-800 hover:bg-blue-200">Export All (JSON)</button><button type="button" data-action="importJSON" class="btn bg-blue-100 text-blue-800 hover:bg-blue-200">Import All (JSON)</button><input type="file" id="import-json-file" class="hidden" accept="application/json" onchange="MindMeshApp.instance.handlers.processImport(event)"><button type="button" data-action="exportCSV" data-type="users" class="btn bg-green-100 text-green-800 hover:bg-green-200">Export Users (CSV)</button><button type="button" data-action="exportCSV" data-type="history" class="btn bg-green-100 text-green-800 hover:bg-green-200">Export History (CSV)</button></div></div><div class="flex-shrink-0 mt-6 flex justify-end pt-4 border-t"><button type="submit" data-action="saveSettings" class="btn-primary">Save & Close</button></div></form>`;this.open(content,"max-w-lg")}
+        showSolverView(entry, record) { const user=this.app.state.users.find(u=>u.id===record.userId);const content=` <div class="p-4 sm:p-8 flex flex-col h-full"><div class="flex-shrink-0 flex flex-col sm:flex-row justify-between items-start mb-4 gap-4"><div><h2 class="text-3xl font-bold text-indigo-600">Challenge: #${entry.number}</h2><p class="text-slate-500">Participant: ${user?.name||"Unknown"}</p></div><div id="solver-countdown" class="text-5xl sm:text-6xl font-mono font-bold text-red-500 bg-slate-100 rounded-lg px-4 py-2"></div></div><div class="flex-grow flex flex-col md:flex-row gap-6 overflow-y-auto"><div class="w-full md:w-1/2 flex items-center justify-center bg-slate-100 rounded-lg p-4 min-h-[200px]">${entry.image?`<img src="${entry.image}" class="max-w-full max-h-[50vh] object-contain rounded-md" onerror="this.style.display='none'">`:`<div class="w-full h-full flex items-center justify-center text-8xl font-bold rounded-md text-indigo-300">${entry.number}</div>`}</div><div class="w-full md:w-1/2 flex flex-col"><div class="flex-grow"><h3 class="text-xl font-semibold">Description</h3><p class="text-slate-600 bg-slate-50 p-3 rounded-md mt-1 h-32 sm:h-48 overflow-y-auto">${entry.description}</p></div><div class="flex-shrink-0 mt-4"><div class="w-full bg-slate-200 rounded-full h-5 mt-4 overflow-hidden"><div id="solver-progress" class="bg-green-500 h-5 rounded-full transition-all duration-1000 linear" style="width: 100%"></div></div><div class="grid grid-cols-2 gap-4 mt-6"><button data-action="stopSolver" data-id="${record.id}" data-status="stopped" class="btn-danger p-4 text-lg sm:text-xl">Stop</button><button data-action="stopSolver" data-id="${record.id}" data-status="solved" class="btn bg-green-500 text-white hover:bg-green-600 p-4 text-lg sm:text-xl">Solved</button></div></div></div></div></div>`;this.open(content,"max-w-5xl");let timeLeft=record.duration;const countdownEl=this.dialog.querySelector("#solver-countdown");const progressEl=this.dialog.querySelector("#solver-progress");const updateTimer=()=>{countdownEl.textContent=`${Math.floor(timeLeft/60).toString().padStart(2,"0")}:${(timeLeft%60).toString().padStart(2,"0")}`;progressEl.style.width=`${timeLeft/record.duration*100}%`};updateTimer();this.app.state.solver.timerInterval=setInterval(()=>{timeLeft--;updateTimer();if(timeLeft<=0)MindMeshApp.instance.handlers.stopSolver({id:record.id,status:"time_up"})},1e3);this.dialog.addEventListener("close",()=>{if(this.app.state.solver.timerInterval){MindMeshApp.instance.handlers.stopSolver({id:record.id,status:"stopped"})}},{once:true})}
+        showSolved(record) { this.ui.playSound(this.ui.elements.winSound);const user=this.app.state.users.find(u=>u.id===record.userId);const content=` <div class="bg-white p-8 rounded-xl w-full text-center"><h2 class="text-4xl font-bold text-slate-800 mt-6">Challenge Solved!</h2><p class="text-slate-600 mt-2">Congratulations to:</p><p class="font-bold text-2xl" style="color: var(--brand-color);">${user.name}</p><p class="text-slate-500 text-md">${user.school||""}</p><div class="mt-8"><button data-action="closeModal" class="btn-primary w-full p-3 text-lg">Awesome!</button></div></div>`;this.open(content,"max-w-md")}
+        showTimeUp() { const content=` <div class="bg-white p-8 rounded-xl w-full text-center"><svg xmlns="http://www.w3.org/2000/svg" class="mx-auto h-20 w-20 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg><h2 class="text-4xl font-bold text-slate-800 mt-4">Time's Up!</h2><div class="mt-8"><button data-action="closeModal" class="btn-primary w-full p-3">OK</button></div></div>`;this.open(content,"max-w-sm")}
+        showConfirmation(title, message) { return new Promise(resolve=>{const content=` <div class="bg-white p-6 rounded-xl w-full max-w-sm text-center"><h3 class="text-lg font-bold text-slate-800 mt-2">${title}</h3><p class="text-sm text-slate-500 mt-1">${message}</p><div class="mt-6 flex justify-center gap-4"><button id="confirm-cancel-btn" class="btn-secondary">Cancel</button><button id="confirm-ok-btn" class="btn-danger">Confirm</button></div></div>`;this.open(content,"max-w-sm");this.dialog.querySelector("#confirm-ok-btn").onclick=()=>{this.close();resolve(true)};this.dialog.querySelector("#confirm-cancel-btn").onclick=()=>{this.close();resolve(false)};this.dialog.addEventListener("close",()=>resolve(false),{once:true})})}
+    }
+    
+    /**
+     * @class MindMeshApp
+     * @description The main application class that orchestrates everything.
+     */
+    class MindMeshApp {
+        static instance = null;
+        constructor() {
+            if (MindMeshApp.instance) return MindMeshApp.instance;
+            MindMeshApp.instance = this;
+            this.db = new DBService();
+            this.ui = new UIService(this);
+            this.handlers = new Handlers(this);
+            this.state = {
+                entries: [], users: [], history: [],
+                settings: { id: 1, sounds: true, confetti: true, spinDuration: 8000, theme: 'indigo' },
+                isSpinning: false, currentRotation: 0,
+                winningEntry: null,
+                solver: { timerInterval: null },
+            };
+        }
+
+        async init() {
+            try {
+                await this.db.init();
+                await this.loadState();
+                this.ui.applyTheme(this.state.settings.theme);
+                this.ui.renderWheel(this.state.entries);
+                this.attachEventListeners();
+                this.ui.hideLoadingScreen(); // Hide loading screen after setup
+                console.log("MindMesh Responsive Pro v2.5 Initialized");
+            } catch(e) {
+                console.error("Initialization failed:", e);
+                this.ui.showToast("Application failed to start.", "error");
+                this.ui.hideLoadingScreen();
+            }
+        }
+
+        async loadState() { /* ... (loadState unchanged) ... */ const[entries,users,history,settings]=await Promise.all([this.db.getAll("entries"),this.db.getAll("users"),this.db.getAll("history"),this.db.get("settings",1)]);if(entries.length===0){const defaultEntries=Array.from({length:30},(_,i)=>({id:Date.now()+i,number:i+1,enabled:!0,timer:60,weight:1,image:null,description:`This is the default description for item ${i+1}.`,removeOnWin:!1,removed:!1}));await Promise.all(defaultEntries.map(e=>this.db.put("entries",e))),this.state.entries=defaultEntries,await this.db.put("settings",this.state.settings)}else this.state.entries=entries.map(e=>({...e,weight:e.weight||1,removeOnWin:e.removeOnWin===void 0?!1:e.removeOnWin,removed:e.removed===void 0?!1:e.removed}));this.state.users=users.sort((a,b)=>a.name.localeCompare(b.name)),this.state.history=history,settings&&(this.state.settings={...this.state.settings,...settings})}
+
+        attachEventListeners() { /* ... (event listeners unchanged) ... */ this.ui.elements.spinButton.addEventListener("click",()=>this.spinWheel()),document.body.addEventListener("click",e=>{const t=e.target.closest("[data-action]");if(!t)return;const{action:i,id:s,status:n,type:o}=t.dataset;this.handlers[i]&&this.handlers[i]({id:s?parseInt(s):void 0,status:n,type:o,element:t})}),this.ui.elements.dialog.addEventListener("click",e=>{e.target===this.ui.elements.dialog&&this.ui.Modals.close()}),document.addEventListener("keydown",e=>{e.code==="Space"&&!this.state.isSpinning&&!this.ui.elements.dialog.open&&(e.preventDefault(),this.spinWheel())})}
+        
+        spinWheel() { /* ... (spinWheel logic unchanged) ... */ if(this.state.isSpinning)return;const e=this.state.entries.filter(t=>t.enabled&&!t.removed);if(e.length<2){this.ui.showToast("Enable at least two items to spin.","error");return}this.state.isSpinning=!0,this.ui.elements.spinButton.disabled=!0,this.ui.playSound(this.ui.elements.clickSound),this.ui.playSound(this.ui.elements.spinningSound,!0);const t=this.state.settings.spinDuration,i=1500;setTimeout(()=>{this.ui.fadeOutSound(this.ui.elements.spinningSound,i)},t-i);const s=e.reduce((t,i)=>t+(i.weight||1),0);let n=Math.random()*s,o=null;for(let r of e){const a=r.weight||1;if(n<a){o=r;break}n-=a}let l=0,h=0,d=0;for(const c of e){const p=(c.weight||1)/s*360;if(c.id===o.id){h=l,d=l+p;break}l+=p}const g=Math.random()*(d-h),u=h+g,m=360-u,f=this.state.currentRotation+7200+m-this.state.currentRotation%360;this.ui.elements.wheelContainer.style.transition=`transform ${t/1e3}s var(--ease-out-quint)`,this.ui.elements.wheelContainer.style.transform=`rotate(${f}deg)`,this.state.currentRotation=f,this.state.winningEntry=o,this.ui.elements.wheelContainer.addEventListener("transitionend",this.onSpinEnd,{once:!0}),setTimeout(async()=>{if(!this.state.winningEntry)return;this.state.winningEntry.removeOnWin?(this.state.winningEntry.removed=!0,await this.db.put("entries",this.state.winningEntry),this.ui.renderWheel(this.state.entries),this.ui.showToast(`Item #${this.state.winningEntry.number} won and removed!`,"success")):this.ui.showToast(`Landed on #${this.state.winningEntry.number}!`,"success"),this.showResult(this.state.winningEntry)},t-200)}
+
+        onSpinEnd = () => { this.state.isSpinning = false; this.ui.elements.spinButton.disabled = false; this.state.winningEntry = null; }
+        showResult(entry) { if (this.state.settings.confetti) this.ui.Confetti.start(); this.ui.Modals.showResult(entry); }
+    }
+
+    /**
+     * @class Handlers
+     * @description Contains all functions triggered by user actions via `data-action` attributes.
+     */
+    class Handlers {
+        constructor(app) { this.app = app; this.db = app.db; this.ui = app.ui; }
+        // Modal Triggers
+        showControlPanel=()=>this.ui.Modals.showControlPanel();showUsers=()=>this.ui.Modals.showUsers();showHistory=()=>this.ui.Modals.showHistory();showStats=()=>this.ui.Modals.showStats();showSettings=()=>this.ui.Modals.showSettings();showItemEditor=({id})=>this.ui.Modals.showItemEditor(id);showUserEditor=({id})=>this.ui.Modals.showUserEditor(id);closeModal=()=>this.ui.Modals.close();
+        
+        // ... (All handler logic is unchanged as it was already robust and functional)
+        async restoreEntry({id}) { const entry=this.app.state.entries.find(e=>e.id===id);if(entry){entry.removed=!1,await this.db.put("entries",entry),this.ui.renderWheel(this.app.state.entries),this.ui.showToast(`Item #${entry.number} restored to the wheel.`,"info"),this.ui.Modals.close()} }
+        async saveEntry({id:e,element:t}){t.disabled=!0;try{const i=t.closest("form"),s=this.app.state.entries.find(t=>t.id===e);s.enabled=i.querySelector("#editor-enabled").checked,s.removeOnWin=i.querySelector("#editor-remove-on-win").checked,s.timer=Math.max(5,parseInt(i.querySelector("#editor-timer").value,10)||60),s.weight=Math.max(1,parseInt(i.querySelector("#editor-weight").value,10)||1),s.description=i.querySelector("#editor-description").value.trim();const n=i.querySelector("#editor-image-preview");s.image=n.src.startsWith("data:image")?n.src:n.src?s.image:null,await this.db.put("entries",s),this.ui.renderWheel(this.app.state.entries),this.ui.showToast(`Item #${s.number} saved!`,"success"),this.ui.Modals.close()}catch(o){console.error("Failed to save entry:",o),this.ui.showToast("Error saving item.","error")}finally{t.disabled=!1}}
+        async saveUser({id:e,element:t}){t.disabled=!0;const i=t.closest("form"),s=i.querySelector("#user-name").value.trim();if(!s)return this.ui.showToast("User name is required.","error"),void(t.disabled=!1);try{const n=e!==void 0,o=n?this.app.state.users.find(t=>t.id===e):{id:Date.now()};o.name=s,o.school=i.querySelector("#user-school").value.trim(),o.status=i.querySelector("#user-status").checked?"active":"inactive",o.notes=i.querySelector("#user-notes").value.trim(),await this.db.put("users",o);const r=await this.db.getAll("users");this.app.state.users=r.sort((a,b)=>a.name.localeCompare(b.name)),this.ui.showToast(`User ${n?"updated":"added"}.`,"success"),this.ui.Modals.showUsers()}catch(a){console.error("Failed to save user:",a),this.ui.showToast("Error saving user.","error")}finally{t.disabled=!1}}
+        async saveSettings({element:e}){e.disabled=!0;try{const t=e.closest("form"),i=t.querySelector('input[name="settings-theme"]:checked').value;this.app.state.settings.sounds=t.querySelector("#settings-sounds").checked,this.app.state.settings.confetti=t.querySelector("#settings-confetti").checked,this.app.state.settings.spinDuration=parseInt(t.querySelector("#settings-duration").value,10)||8e3,this.app.state.settings.theme=i,this.ui.applyTheme(i),await this.db.put("settings",this.app.state.settings),this.ui.showToast("Settings saved!","success"),this.ui.Modals.close()}catch(s){console.error("Failed to save settings:",s),this.ui.showToast("Error saving settings.","error")}finally{e.disabled=!1}}
+        exportJSON=()=>{const e=JSON.stringify({entries:this.app.state.entries,users:this.app.state.users,history:this.app.state.history,settings:this.app.state.settings}),t="data:application/json;charset=utf-8,"+encodeURIComponent(e),i=document.createElement("a");i.href=t,i.download=`mindmesh_backup_${(new Date).toISOString().slice(0,10)}.json`,i.click()}
+        importJSON=()=>{document.getElementById("import-json-file").click()}
+        processImport=async e=>{const t=e.target.files[0];if(!t)return;const i=await this.ui.Modals.showConfirmation("Overwrite All Data?","Importing will replace all current app data. This cannot be undone.");if(!i)return;const s=new FileReader;s.onload=async e=>{try{const t=JSON.parse(e.target.result);t.entries&&t.users&&t.history&&t.settings?(await Promise.all([this.db.clear("entries"),this.db.clear("users"),this.db.clear("history")]),await Promise.all([...t.entries.map(e=>this.db.put("entries",e)),...t.users.map(e=>this.db.put("users",e)),...t.history.map(e=>this.db.put("history",e)),this.db.put("settings",t.settings)]),this.ui.showToast("Import successful! Reloading...","success"),setTimeout(()=>window.location.reload(),1500)):this.ui.showToast("Invalid JSON file format.","error")}catch(i){this.ui.showToast("Error parsing JSON file.","error"),console.error(i)}},s.readAsText(t)}
+        exportCSV=({type:e})=>{let t,i,s;if("users"===e)i=["id","name","school","status","notes"],t=this.app.state.users,s="mindmesh_users.csv";else{i=["id","number","userId","userName","startedAt","status","duration"];const n=this.app.state.users;t=this.app.state.history.map(e=>({...e,userName:n.find(t=>t.id===e.userId)?.name||"N/A"})),s="mindmesh_history.csv"}if(0===t.length)return void this.ui.showToast("No data to export.","info");const o=[i.join(",")];t.forEach(e=>{const t=i.map(t=>`"${String(e[t]||"").replace(/"/g,'""')}"`);o.push(t.join(","))});const r=o.join("\n"),a=new Blob([r],{type:"text/csv;charset=utf-8,"}),l=document.createElement("a");l.href=URL.createObjectURL(a),l.download=s,l.click(),URL.revokeObjectURL(l.href)}
+        removeImage=()=>{const e=this.ui.elements.dialog;e.querySelector("#editor-image-preview").src="",e.querySelector("#editor-image-preview").classList.add("hidden"),e.querySelector("#editor-remove-image").classList.add("hidden"),e.querySelector("#editor-image-upload").value=""}
+        startChallenge=({id:e})=>this.ui.Modals.showSolverStartForm(e)
+        startSolver=async({id:e,element:t})=>{t.disabled=!0;try{const i=t.closest("form"),s=this.app.state.entries.find(t=>t.id===e),n=i.querySelector("#solver-user-select").value;let o;if("new"===n){const r=i.querySelector("#solver-name").value.trim();if(!r)return this.ui.showToast("New participant name is required.","error"),void(t.disabled=!1);o={id:Date.now(),name:r,school:i.querySelector("#solver-school").value.trim(),status:"active",notes:""},await this.db.put("users",o),this.app.state.users.push(o),this.app.state.users.sort((a,b)=>a.name.localeCompare(b.name))}else if(n)o=this.app.state.users.find(e=>e.id==n);else return this.ui.showToast("Please select a participant.","error"),void(t.disabled=!1);const a={id:Date.now(),number:s.number,userId:o.id,startedAt:(new Date).toISOString(),status:"active",duration:s.timer};await this.db.put("history",a),this.app.state.history.push(a),this.ui.Modals.showSolverView(s,a)}catch(l){console.error("Failed to start solver:",l),this.ui.showToast("Error starting challenge.","error")}finally{t.disabled=!1}}
+        stopSolver=async({id:e,status:t})=>{this.app.state.solver.timerInterval&&clearInterval(this.app.state.solver.timerInterval),this.app.state.solver.timerInterval=null;const i=this.app.state.history.find(t=>t.id===e);i&&"active"===i.status&&(i.status=t,await this.db.put("history",i)),this.ui.Modals.close(),"solved"===t?this.ui.Modals.showSolved(i):"time_up"===t?this.ui.Modals.showTimeUp():this.ui.showToast("Challenge stopped.","info")}
+        deleteUser=async({id:e})=>{const t=await this.ui.Modals.showConfirmation("Delete User?","This cannot be undone.");t&&(await this.db.delete("users",e),this.app.state.users=this.app.state.users.filter(t=>t.id!==e),this.ui.showToast("User deleted.","success"),this.ui.Modals.showUsers())}
+        deleteAllUsers=async()=>{const e=await this.ui.Modals.showConfirmation("Delete All Users?","This is permanent and cannot be undone.");e&&(await this.db.clear("users"),this.app.state.users=[],this.ui.showToast("All users have been deleted.","success"),this.ui.Modals.showUsers())}
+        deleteHistory=async({id:e})=>{const t=await this.ui.Modals.showConfirmation("Delete Record?","This cannot be undone.");t&&(await this.db.delete("history",e),this.app.state.history=this.app.state.history.filter(t=>t.id!==e),this.ui.showToast("History record deleted.","success"),this.ui.Modals.showHistory())}
+        deleteAllHistory=async()=>{const e=await this.ui.Modals.showConfirmation("Delete All History?","This is permanent and cannot be undone.");e&&(await this.db.clear("history"),this.app.state.history=[],this.ui.showToast("All history has been deleted.","success"),this.ui.Modals.showHistory())}
+        toggleHistorySolved=async({id:e})=>{const t=this.app.state.history.find(t=>t.id===e);t&&(t.status="solved"===t.status?"stopped":"solved",await this.db.put("history",t),this.ui.Modals.showHistory())}
+    }
+
+    // --- Application Entry Point ---
+    const appInstance = new MindMeshApp();
+    appInstance.init();
+    window.MindMeshApp = appInstance; // Expose for debugging
+
+});
+</script>
+</body>
+</html>
